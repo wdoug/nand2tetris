@@ -42,7 +42,7 @@ M=0
 
 (SET_KEY_PRESSED_FLAG_ON)
     @keyPressed
-    M=1
+    M=1     // keyPressed = 1
 
     @KEY_PRESSED_FLAG_RETURN
     0;JMP   // goto KEY_PRESSED_FLAG_RETURN
@@ -51,6 +51,25 @@ M=0
     @SCREEN // Set the A register to point to the memory
             // word that is mapped to the 16 left-most
             // pixels of the top row of the screen.
-    M=!M    // Toggle register pixels color
+    D=A
+    @i      // i refers to some mem. location.
+    M=D     // i=screen pointer start
+(LOOP_SCREEN)
+    @i
+    D=M     // D=i
+    @24576  // Last screen address => 24,576 = 16384 + 256 * 32
+    D=A-D   // D=8192-i
     @TOGGLE_SCREEN_RETURN
-    0;JMP   // goto LOOP
+    D;JLE   // if 8192-i <= 0 goto TOGGLE_SCREEN_RETURN
+
+    @i
+    A=M     // Set register A to value of i
+    M=!M    // Toggle register pixels color at Memory[A]
+
+    @i
+    M=M+1 // i=i+1
+    @LOOP_SCREEN
+    0;JMP // goto LOOP_SCREEN
+
+    @TOGGLE_SCREEN_RETURN
+    0;JMP   // goto TOGGLE_SCREEN_RETURN
