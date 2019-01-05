@@ -6,14 +6,23 @@ import os.path
 from typing import Union
 
 
+def is_symbol(value: str):
+    try:
+        int(value)
+        return False
+    except ValueError:
+        return True
+
+
 def parse_line(line: str):
     normalized = re.sub(r"\s+|//.*", "", line)
     if not normalized:
         return None
 
-    output = {}
-    if normalized[0] == "@":
-        output = {"instruction": "a", "value": normalized[1:]}
+    if normalized[0] == "(":
+        return {"label": True, "value": normalized[1:-1]}
+    elif normalized[0] == "@":
+        return {"instruction": "a", "value": normalized[1:]}
     else:
         dest = None
         assignment = normalized.split("=")
@@ -24,16 +33,16 @@ def parse_line(line: str):
         jump = None
         if len(right_side) > 1:
             jump = right_side[1]
-        output = {"instruction": "c", "dest": dest, "comp": comp, "jump": jump}
-
-    return output
+        return {"instruction": "c", "dest": dest, "comp": comp, "jump": jump}
 
 
 def parse_file(filename: str):
     parsed_lines = []
     with open(filename) as file:
         for line in file:
-            parsed_lines.append(parse_line(line))
+            parsed = parse_line(line)
+            if parsed:
+                parsed_lines.append(parsed)
     return parsed_lines
 
 
@@ -117,10 +126,64 @@ def get_output(parsed_line: dict):
         )
 
 
+predefined_symbols = {
+    "R0": 0,
+    "R1": 1,
+    "R2": 2,
+    "R3": 3,
+    "R4": 4,
+    "R5": 5,
+    "R6": 6,
+    "R7": 7,
+    "R8": 8,
+    "R9": 9,
+    "R10": 10,
+    "R11": 11,
+    "R12": 12,
+    "R13": 13,
+    "R14": 14,
+    "R15": 15,
+    "SCREEN": 16384,
+    "KBD": 24576,
+    "SP": 0,
+    "LCL": 1,
+    "ARG": 2,
+    "THIS": 3,
+    "THAT": 4,
+}
+
+
+def replace_symbols(parsed_lines: list):
+    symbols = {**predefined_symbols}
+    no_labels = []
+    for parsed in parsed_lines:
+        if parsed:
+            if "label" in parsed:
+                symbols[parsed["value"]] = len(no_labels)
+                # print("label: ", parsed["value"], len(no_labels))
+            else:
+                no_labels.append(parsed)
+
+    variable_index = 16
+    for parsed in no_labels:
+        if parsed["instruction"] == "a" and is_symbol(parsed["value"]):
+            symbol = parsed["value"]
+
+            if symbol not in symbols:
+                symbols[symbol] = variable_index
+                variable_index += 1
+
+            parsed["value"] = symbols[symbol]
+
+    return no_labels
+
+
 def assemble(input_filename: str, output_filename: str):
+    parsed_lines = parse_file(input_filename)
+    preprocessed_lines = replace_symbols(parsed_lines)
+
     with open(output_filename, "w") as output_file:
-        parsed_lines = parse_file(input_filename)
-        for parsed in parsed_lines:
+        for parsed in preprocessed_lines:
             if parsed:
                 output_line = get_output(parsed)
                 output_file.write(output_line + "\n")
@@ -137,6 +200,10 @@ if __name__ == "__main__":
     args = cli_parser.parse_args()
     input_filepath = args.input_filepath
     filepath, file_extension = os.path.splitext(input_filepath)
+    if file_extension != ".asm":
+        raise Exception(
+            f'Only files with .asm extension are excepted. Instead received a "{file_extension}" extension"'
+        )
     output_filepath = filepath + ".hack"
 
     if not os.path.isfile(input_filepath):
